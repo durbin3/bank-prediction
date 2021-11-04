@@ -1,5 +1,6 @@
 import tensorflow as tf
 import tensorflow.keras.losses as losses
+import tensorflow.keras.callbacks
 import numpy as np
 import matplotlib.pyplot as plt
 # import seaborn as sns
@@ -23,42 +24,49 @@ columns = [
         'requested_amnt','annual_income','fico_score_range_low','fico_score_range_high',
         'revolving_balance'
 ]
-def main():
+load_model = True
 
+def main():
     raw = get_raw_data()
     x_train,x_test,y_train,y_test = preprocessData(raw)
 
     model = trainModel(x_train,y_train)
-    print("Model Predict:")
+    if (load_model is False):
+        print("Model Predict:")
 
-    predictions = predict(model,x_test)
-    score = score_model(predictions,y_test)
-    print("\n\nScore =",score,"\n\n")
-    # final_preds(predict_df,p_predict_data,model)
+        predictions = predict(model,x_test)
+        score = score_model(predictions,y_test)
+        print("\n\nScore =",score,"\n\n")
+    final_preds(model)
 
 
 def get_raw_data():
+    print("Loading Data")
     df = pd.read_csv('./lending_train.csv')
     # data = df[columns]
     return df
 
 def preprocessData(raw):
+    print("Preprocessing Data")
     data = pd.DataFrame(normalize_df(raw[columns]))
     data = data.join(categorize_col(raw,'race'))
     data = data.join(categorize_col(raw,'loan_duration'))
     data = data.join(categorize_col(raw,'home_ownership_status'))
     data = data.join(categorize_col(raw,'employment_length'))
+    # data = data.join(categorize_col(raw,'extended_reason'),rsuffix='ext_')
+    extended_reason =raw['extended_reason'].astype('category').cat.codes.to_frame()
+    data = data.join(extended_reason)
+    data = data.join(categorize_col(raw,'employment_verified'))
+    data = data.join(categorize_col(raw,'state'))
     
-    print(columns)
-    # data = data.join(pd.get_dummies(raw['race']))
-    
-    print(data.head())
     data['loan_paid'] = raw.loc[:,'loan_paid']
 
-    train_paid = data.loc[data['loan_paid'] == 1].sample(n=10000)
-    train_nopay =  data.loc[data['loan_paid'] == 0].sample(n=10000)
+    train_paid = data.loc[data['loan_paid'] == 1].sample(n=15000)
+    train_nopay =  data.loc[data['loan_paid'] == 0].sample(n=15000)
 
     Train = train_paid.append(train_nopay)
+    Train = Train.sample(frac=1)
+    print(Train.head())
     xTrain = Train[columns]
 
     yTrain = Train[['loan_paid']]
@@ -69,8 +77,23 @@ def preprocessData(raw):
     # yTest = yTest.reshape(len(yTest),1)
 
     return (xTrain,xTest,yTrain,yTest)
+
+
+
 def trainModel(x_train,y_train):
+    print("Training Model")
+    checkpoint_path = "./model/model.ckpt"
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path,
+        save_weights_only=True,
+        save_freq=5*625,
+        verbose=1)
+
     model = tf.keras.models.Sequential([
+        # tf.keras.layers.Dense(1024,activation='sigmoid'),
+        # tf.keras.layers.Dropout(.2),
         tf.keras.layers.Dense(512,activation='sigmoid'),
         tf.keras.layers.Dropout(.2),
         tf.keras.layers.Dense(256,activation='sigmoid'),
@@ -83,20 +106,24 @@ def trainModel(x_train,y_train):
         tf.keras.layers.Dense(1)])
 
     print("Model Created")
+    if (load_model and os.path.exists(checkpoint_dir)):
+        print("Loading Model")
+        model.load_weights(checkpoint_path).expect_partial()
+        return model
+    
     loss = losses.BinaryCrossentropy()
     adam = tf.keras.optimizers.Adam()
     model.compile(optimizer=adam, loss=loss,metrics=['accuracy'])
-    model.fit(x_train, y_train, epochs=4)
-    print("Model Done Training")
+    model.fit(x_train, y_train, epochs=20,callbacks=[cp_callback])
     return model
 
 def predict(model,xVals):
+    print("Predicting")
     preds = model.predict(xVals)
     return np.where(preds > .5, 1,0)
 
 def score_model(y_preds,y_actual):
     if (len(y_preds)!= len(y_actual)): return -1
-    score = 0
     return (np.where(y_preds==y_actual,1,0).sum())/len(y_preds)
 
 def normalize_col(col):
@@ -115,7 +142,6 @@ def analysis():
     df = df.drop(columns=['employment','zipcode'])
     graph_data = df.drop(columns=['loan_duration','employment_length','race','reason_for_loan','extended_reason',
     'employment_verified','state','home_ownership_status','type_of_application'])
-    # df = df.notna()
     dat = graph_data.loc[df['loan_paid']==1].append(df.loc[df['loan_paid']==0])
 
     i = 0
@@ -141,25 +167,35 @@ def analysis():
     print("Done!")
 
 
-def final_preds(df,out_x,model):
+def final_preds(model):
     predict_df = pd.read_csv('./lending_topredict.csv')
-    predict_data = predict_df[columns]
-    p_predict_data = normalize_df(predict_data)
-    
-    preds_df = pd.DataFrame(df['ID'])
+    columns = [
+            'requested_amnt','annual_income','fico_score_range_low','fico_score_range_high',
+            'revolving_balance'
+    ]
+    data = pd.DataFrame(normalize_df(predict_df[columns]))
+    data = data.join(categorize_col(predict_df,'race'))
+    data = data.join(categorize_col(predict_df,'loan_duration'))
+    data = data.join(categorize_col(predict_df,'home_ownership_status'))
+    data = data.join(categorize_col(predict_df,'employment_length'))
+    extended_reason = predict_df['extended_reason'].astype('category').cat.codes.to_frame()
+    data = data.join(extended_reason)
+    data = data.join(categorize_col(predict_df,'employment_verified'))
+    columns = ['requested_amnt', 'annual_income', 'fico_score_range_low', 'fico_score_range_high', 'revolving_balance', 'W', 'B', 'P', 'A', 'N', ' 60 months', ' 36 months', 'RENT', 'MORTGAGE', 'OWN', 'OTHER', 'ANY', 'NONE', '4 years', '10+ years', '2 years', '7 years', '8 years', '3 years', '< 1 year', '1 year', '9 years', '5 years', '6 years', 'Verified', 'Source Verified', 'Not Verified', 'FL', 'AR', 'NY', 'MI', 'MN', 'NJ', 'MA', 'SD', 'MD', 'IN', 'AZ', 'VA', 'TX', 'WI', 'NM', 'NH', 'CA', 'OH', 'WV', 'CO', 'WA', 'NC', 'AL', 'SC', 'OK', 'OR', 'NV', 'PA', 'KS', 'MO', 'MT', 'TN', 'GA', 'IL', 'AK', 'KY', 'CT', 'LA', 'RI', 'MS', 'DC', 'DE', 'ID', 'WY', 'UT', 'HI', 'ND', 'NE', 'VT', 'ME', 'IA'] 
+    data = data.join(categorize_col(predict_df,'state'))
+    xPred = data[columns]
+    preds_df = pd.DataFrame(predict_df['ID'])
     preds_df = preds_df.set_index('ID')
-    predictions = model.predict(out_x)
+    predictions = predict(model, xPred)
+
     preds_df['loan_paid'] = predictions
     preds_df.to_csv('predictions.csv')
 
 def categorize_col(df,col):
-    # raw = raw.join(pd.get_dummies(raw['race']))
+    print("\tCategorizing Column: ", col)
     cat_col = pd.get_dummies(df[col])
     for x in df[col].unique(): 
-        # if (np.isnan(x) is False):
-        if (type(x)==float):
-            print(x)
-        else:
+        if (type(x)!=float):            
             columns.append(x)
     return cat_col
 
