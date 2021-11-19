@@ -134,11 +134,9 @@ def final_preds(model):
     preds_df.to_csv('predictions.csv')
 
 def categorize_col(df,col,columns):
-    # raw = raw.join(pd.get_dummies(raw['race']))
     cat_col = pd.get_dummies(df[col])
     cols = columns
     for x in df[col].unique(): 
-        # if (np.isnan(x) is False):
         if (type(x)==float):
             print(x)
         else:
