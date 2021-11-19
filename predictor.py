@@ -34,13 +34,14 @@ def main():
     # x_train,x_test,y_train,y_test = preprocessDataTree(raw)
     # model = trainModel(x_train,y_train)
     print("Constructing Model")
-    model = makeTreeModel(x_train.values,y_train)
+    models = makeModel(x_train.join(y_train))
+    # model = makeTreeModel(x_train.values,y_train)
     print("Model Predict:")
-
-    predictions = predict(model,x_test)
-    score = score_model(predictions,y_test)
-    print("\n\nScore =",score,"\n\n")
-    final_preds(model)
+    # predictions = predict(models,x_test)
+    # score = score_model(predictions,y_test)
+    predict_models(models,x_test,y_test)
+    # print("\n\nScore =",score,"\n\n")
+    # final_preds(models)
     print("Done")
 
 
@@ -69,17 +70,22 @@ def preprocessData(raw):
 
     return (xTrain,xTest,yTrain,yTest)
 
+def makeModel(data):
+    race_models = {}
+    for race in data['race'].unique():
+        print("Making model for race=",race)
+        x = data.loc[data['race']==race]
+        y = x["loan_paid"]
+        race_models[race] = makeTreeModel(x,y)
 
+    return race_models
 def makeTreeModel(x,y):
+    x = x.values()
     y = np.array(y.values.tolist()).reshape(len(y),)
     print(x.shape,y.shape)
-    model = GradientBoostingClassifier(n_estimators=1000,learning_rate=.001,max_depth=1,verbose=True)
-    # cv = RepeatedStratifiedKFold(n_splits=10, n_repeats=3, random_state=1)
-    # n_scores = cross_val_score(model, x, y, scoring='accuracy', cv=cv, n_jobs=-1)
-    # print('Mean Accuracy: %.3f (%.3f)' % (np.mean(n_scores), np.std(n_scores)))
+    model = GradientBoostingClassifier(n_estimators=100,learning_rate=.01,max_depth=1,verbose=False)
     model.fit(x,y)
     return model
-
 
 # def makeTFModel(x_train,y_train):
 #     model = tf.keras.models.Sequential([
@@ -104,8 +110,24 @@ def makeTreeModel(x,y):
 
 def predict(model,xVals):
     preds = model.predict(xVals)
-    print(preds)
     return np.where(preds > .5, 1,0)
+
+def predict_models(models,xvals,yvals):
+    predictions = []
+    races = models.keys()
+    for key in races:
+        model = models[key]
+        p = model.predict(np.where(xvals['race']==key))
+        predictions.append(p)
+
+    total_data = xvals.join(yvals)
+    correct = 0
+    total = 0
+    for i in range(len(races)):
+        y_preds = predictions[i].reshape(len(y_preds),)
+        y_actual = np.where(xvals['race']==races[i])
+        print("yactual ", y_actual)
+    return predictions
 
 def score_model(y_preds,y_actual):
     if (len(y_preds)!= len(y_actual)): return -1

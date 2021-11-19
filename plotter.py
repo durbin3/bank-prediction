@@ -62,12 +62,11 @@ def cluster():
     plot_pca(all_data,"both",key)
     
     print("UMAP Clustering")
-    reducer = umap.UMAP()
-    reducer.fit(all_data)
-    embedding = reducer.transform(all_data)
-    assert(np.all(embedding == reducer.embedding_))
+    reducer = umap.UMAP(n_neighbors=30,min_dist=0.0,n_components=2,random_state=42)
+    embedding = reducer.fit_transform(all_data)
     print(f'Dimensionality of the embedding: {embedding.shape}')
     plot_embedding(embedding,key,"both","UMAP")
+    print("Done")
     return
 
 def plot_pca(df,data_type,key):
@@ -79,7 +78,7 @@ def plot_pca(df,data_type,key):
     plot_embedding(embedding,key,data_type,"PCA")
     
 def plot_embedding(embedding,key,data_type,embedding_type):
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=key, cmap='Spectral', s=5,alpha=.3)
+    plt.scatter(embedding[:, 0], embedding[:, 1], c=key, cmap='Spectral', s=.1,alpha=.6)
     plt.colorbar(boundaries=np.arange(11)-0.5).set_ticks(np.arange(2))
     plt.gca().set_aspect('equal', 'datalim')
     plt.title(f'{embedding_type} projection of the {data_type} dataset', fontsize=24)
@@ -96,7 +95,8 @@ def preprocess(raw):
     data['requ_to_income'] = (data['requested_amnt']+1)/(data['annual_income']+1)
     
     data = data.fillna(0)
-    return data
+    data = data.sample(frac=.1)
+    return data 
 
 def trim_data(raw):
     columns = [
