@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 from pandas.core.frame import DataFrame
 from sklearn.decomposition import PCA
 import umap
+from utils import *
+
+def main():
+    analysis()
+    # cluster()
 
 def analysis():
     print("Analysis")
@@ -11,29 +16,21 @@ def analysis():
     train_df = pd.read_csv('./data/lending_train.csv')
     test_df = pd.read_csv('./data/lending_topredict.csv')
 
+    # plot_col_differences(train_df,test_df,'debt_to_income_ratio')
+    get_cat_differences(train_df,test_df,'race')
+    get_cat_differences(train_df,test_df,'loan_duration')
+    get_cat_differences(train_df,test_df,'employment_length')
+    get_cat_differences(train_df,test_df,'home_ownership_status')
+    print("Done!")
+
+def get_cat_differences(train_df,test_df,column):
     num_entries = len(train_df['ID'])
-    # data = train_df['requested_amnt']
-    # t_data = test_df['requested_amnt']
-    # mu = np.average(data)
-    # mut = np.average(t_data)
-    # std = np.std(data)
-    # stdt = np.std(t_data)
-    # print("Plotting!")
-    # for b in range(10,20):
-    #     plt.hist(data,b,color='blue',alpha=.5)
-    #     plt.hist(t_data,b,color='red', alpha=.5)
-    #     plt.savefig(f'./plots/histogram_{b}.jpg')
-    #     plt.clf()
-
-    # print(f'mu: {mu}, std: {std}')
-    # print(f'mu: {mut}, std: {stdt}')
-
     
-    data = train_df[['race','requested_amnt']]
-    t_data = test_df[['race','requested_amnt']]
+    data = train_df[['ID',column]]
+    t_data = test_df[['ID',column]]
 
-    cl,_ = categorize_col(data,'race',[])
-    tcl,_ = categorize_col(t_data,'race',[])
+    cl,_ = categorize_col(data,column,[])
+    tcl,_ = categorize_col(t_data,column,[])
 
     print(cl.head())
 
@@ -42,8 +39,24 @@ def analysis():
 
     print("Training:\t", np.array(totals)/num_entries)
     print("Test:\t", np.array(t_totals)/len(test_df['ID']))
-    print("Done!")
 
+def plot_col_differences(train_df,test_df,column):
+    data = train_df[column]
+    t_data = test_df[column]
+    mu = np.mean(data)
+    mut = np.mean(t_data)
+    std = np.std(data)
+    stdt = np.std(t_data)
+    print("Plotting!")
+    create_dir_if_not_exist('./plots/histograms')
+    for b in range(10,20):
+        plt.hist(data,b,color='blue',alpha=.5)
+        plt.hist(t_data,b,color='red', alpha=.5)
+        plt.savefig(f'./plots/histograms/histogram_{b}.jpg')
+        plt.clf()
+
+    print(f'Train\t mu: {mu},\t std: {std}')
+    print(f'Test\t mu: {mut},\t std: {stdt}')
 
 def cluster():
     print("Clustering")
@@ -84,8 +97,8 @@ def plot_embedding(embedding,key,data_type,embedding_type):
     plt.title(f'{embedding_type} projection of the {data_type} dataset', fontsize=24)
     plt.savefig(f'./images/{embedding_type}_{data_type}.jpg')
     plt.clf()
-    
 
+  
 def preprocess(raw):
     data, cols = trim_data(raw)
     
@@ -126,5 +139,6 @@ def categorize_col(df,col,columns):
             cols.append(x)
     return cat_col,cols
 
-# analysis()
-cluster()
+
+if __name__ == "__main__":
+    main()
